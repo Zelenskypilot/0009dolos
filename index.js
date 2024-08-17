@@ -6,48 +6,63 @@ const http = require('http');
 // Telegram Bot setup
 const API_TOKEN = process.env.API_TOKEN;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID; // Read admin user ID from .env
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
 const BASE_URL = 'https://socpanel.com/privateApi';
 
 let userAction = {};
 
-// Function to modify balance
-async function modifyBalance(chatId, username, amount, action) {
-    const endpoint = action === 'add' ? 'incrementUserBalance' : 'decrementUserBalance';
-    const url = `${BASE_URL}/${endpoint}?login=${username}&amount=${amount}&token=${API_TOKEN}`;
+// Function to increment user balance
+async function addBalance(chatId, username, amount) {
+    const url = `${BASE_URL}/incrementUserBalance?login=${username}&amount=${amount}&token=${API_TOKEN}`;
 
-    bot.sendMessage(chatId, `🔄 Calling server to ${action} balance for ${username} with amount: ${amount}...`);
+    bot.sendMessage(chatId, `🔍 Adding ${amount} to ${username}'s balance...`);
 
     try {
         const response = await axios.get(url);
-        console.log(response.data);
-
         if (response.data.ok) {
-            bot.sendMessage(chatId, `✅ Success! ${action === 'add' ? 'Added' : 'Removed'} ${amount} balance for ${username}.`);
+            bot.sendMessage(chatId, `✅ Successfully added ${amount} to ${username}'s balance.`);
         } else {
-            bot.sendMessage(chatId, `❌ Failed to ${action} balance for ${username}. Server response was not OK.`);
+            bot.sendMessage(chatId, `❌ Failed to add balance to ${username}.`);
         }
     } catch (error) {
         console.error(`Error: ${error.message}`);
-        bot.sendMessage(chatId, `⚠️ Error while trying to ${action} balance for ${username}: ${error.message}`);
+        bot.sendMessage(chatId, `⚠️ Error while adding balance: ${error.message}`);
     }
 }
 
-// Function to get order details
+// Function to decrement user balance
+async function removeBalance(chatId, username, amount) {
+    const url = `${BASE_URL}/decrementUserBalance?login=${username}&amount=${amount}&token=${API_TOKEN}`;
+
+    bot.sendMessage(chatId, `🔍 Removing ${amount} from ${username}'s balance...`);
+
+    try {
+        const response = await axios.get(url);
+        if (response.data.ok) {
+            bot.sendMessage(chatId, `✅ Successfully removed ${amount} from ${username}'s balance.`);
+        } else {
+            bot.sendMessage(chatId, `❌ Failed to remove balance from ${username}.`);
+        }
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+        bot.sendMessage(chatId, `⚠️ Error while removing balance: ${error.message}`);
+    }
+}
+
+// Get Order Details
 async function getOrderDetails(chatId, username, serviceId) {
     const url = `${BASE_URL}/getOrders?service_id=${serviceId}&token=${API_TOKEN}`;
+
     bot.sendMessage(chatId, `🔍 Checking order details for Service ID: ${serviceId} and Username: ${username}...`);
 
     try {
         const response = await axios.get(url);
-        console.log(response.data);
-
         if (response.data.count > 0) {
             const order = response.data.items.find(order => order.user.login === username);
             if (order) {
-                bot.sendMessage(chatId, `✅ Order found:
+                bot.sendMessage(chatId, `✅ Order found: 
 - Order ID: ${order.id}
 - Charge: ${order.charge}
 - Start Count: ${order.start_count}
@@ -71,6 +86,7 @@ async function getOrderDetails(chatId, username, serviceId) {
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
 
+    // Check if the user is the admin
     if (chatId === parseInt(ADMIN_USER_ID, 10)) {
         const opts = {
             reply_markup: {
@@ -95,13 +111,14 @@ bot.on('message', (msg) => {
     const chatId = msg.chat.id;
     const text = msg.text.trim();
 
+    // Check if the user is the admin
     if (chatId === parseInt(ADMIN_USER_ID, 10)) {
         if (text === '➕ Add Balance' || text === '➖ Remove Balance') {
             userAction[chatId] = { action: text.includes('Add') ? 'add' : 'remove' };
             bot.sendMessage(chatId, `✏️ You chose to ${userAction[chatId].action} balance. Please enter the username:`);
         } else if (text === '🔍 Check Order Status' || text === 'ℹ️ Get Order Details') {
             userAction[chatId] = { action: text.includes('Check') ? 'check_status' : 'get_details' };
-            bot.sendMessage(chatId, '🔍 Please enter the username associated with the service:');
+            bot.sendMessage(chatId, '🔍 Please enter the username associated with the order:');
         } else if (userAction[chatId]) {
             if (!userAction[chatId].username) {
                 userAction[chatId].username = text;
@@ -120,14 +137,19 @@ bot.on('message', (msg) => {
                 } else {
                     bot.sendMessage(chatId, '❗ Please enter a valid Service ID.');
                 }
-            } else if (!userAction[chatId].amount) {
-                const amount = parseInt(text, 10);
+            } else if (userAction[chatId].amount === undefined && (userAction[chatId].action === 'add' || userAction[chatId].action === 'remove')) {
+                const amount = parseFloat(text);
                 if (!isNaN(amount)) {
-                    const { username, action } = userAction[chatId];
-                    modifyBalance(chatId, username, amount, action);
+                    userAction[chatId].amount = amount;
+
+                    if (userAction[chatId].action === 'add') {
+                        addBalance(chatId, userAction[chatId].username, userAction[chatId].amount);
+                    } else if (userAction[chatId].action === 'remove') {
+                        removeBalance(chatId, userAction[chatId].username, userAction[chatId].amount);
+                    }
                     userAction[chatId] = null;
                 } else {
-                    bot.sendMessage(chatId, '❗ Please enter a valid number for the amount.');
+                    bot.sendMessage(chatId, '❗ Please enter a valid amount.');
                 }
             }
         }
