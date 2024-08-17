@@ -1,0 +1,14 @@
+{
+  "name": "smm-panel-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for managing SMM panel user balances",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "dotenv": "^16.3.1",
+    "node-telegram-bot-api": "^0.61.0"
+  }
+}
