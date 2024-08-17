@@ -6,27 +6,48 @@ const http = require('http');
 // Telegram Bot setup
 const API_TOKEN = process.env.API_TOKEN;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID; // Read admin user ID from .env
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
 const BASE_URL = 'https://socpanel.com/privateApi';
 
 let userAction = {};
 
-// Function to get order details using Service ID
-async function getOrderDetails(chatId, username, serviceId) {
-    const url = `${BASE_URL}/getOrders?service_id=${serviceId}&token=${API_TOKEN}`;
-    
-    bot.sendMessage(chatId, `🔍 Checking order details for Service ID: ${serviceId} and Username: ${username}...`);
-    
+// Function to modify balance
+async function modifyBalance(chatId, username, amount, action) {
+    const endpoint = action === 'add' ? 'incrementUserBalance' : 'decrementUserBalance';
+    const url = `${BASE_URL}/${endpoint}?login=${username}&amount=${amount}&token=${API_TOKEN}`;
+
+    bot.sendMessage(chatId, `🔄 Calling server to ${action} balance for ${username} with amount: ${amount}...`);
+
     try {
         const response = await axios.get(url);
-        console.log('Response from API:', response.data);
+        console.log(response.data);
+
+        if (response.data.ok) {
+            bot.sendMessage(chatId, `✅ Success! ${action === 'add' ? 'Added' : 'Removed'} ${amount} balance for ${username}.`);
+        } else {
+            bot.sendMessage(chatId, `❌ Failed to ${action} balance for ${username}. Server response was not OK.`);
+        }
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+        bot.sendMessage(chatId, `⚠️ Error while trying to ${action} balance for ${username}: ${error.message}`);
+    }
+}
+
+// Function to get order details
+async function getOrderDetails(chatId, username, serviceId) {
+    const url = `${BASE_URL}/getOrders?service_id=${serviceId}&token=${API_TOKEN}`;
+    bot.sendMessage(chatId, `🔍 Checking order details for Service ID: ${serviceId} and Username: ${username}...`);
+
+    try {
+        const response = await axios.get(url);
+        console.log(response.data);
 
         if (response.data.count > 0) {
             const order = response.data.items.find(order => order.user.login === username);
             if (order) {
-                bot.sendMessage(chatId, `✅ Order found: 
+                bot.sendMessage(chatId, `✅ Order found:
 - Order ID: ${order.id}
 - Charge: ${order.charge}
 - Start Count: ${order.start_count}
@@ -80,34 +101,33 @@ bot.on('message', (msg) => {
             bot.sendMessage(chatId, `✏️ You chose to ${userAction[chatId].action} balance. Please enter the username:`);
         } else if (text === '🔍 Check Order Status' || text === 'ℹ️ Get Order Details') {
             userAction[chatId] = { action: text.includes('Check') ? 'check_status' : 'get_details' };
-            bot.sendMessage(chatId, '🔍 Please enter the username associated with the order:');
+            bot.sendMessage(chatId, '🔍 Please enter the username associated with the service:');
         } else if (userAction[chatId]) {
             if (!userAction[chatId].username) {
                 userAction[chatId].username = text;
-                if (userAction[chatId].action === 'add' || userAction[chatId].action === 'remove') {
-                    bot.sendMessage(chatId, `🔍 Please enter the amount to ${userAction[chatId].action}:`);
-                } else {
-                    bot.sendMessage(chatId, '🔍 Please enter the Service ID:');
-                }
-            } else if (userAction[chatId].action === 'add' || userAction[chatId].action === 'remove') {
-                const amount = parseFloat(text);
-                if (!isNaN(amount)) {
-                    bot.sendMessage(chatId, `✅ Successfully ${userAction[chatId].action}ed ${amount} to ${userAction[chatId].username}'s balance.`);
-                    userAction[chatId] = null;
-                } else {
-                    bot.sendMessage(chatId, '❗ Please enter a valid amount.');
-                }
+                bot.sendMessage(chatId, '🔍 Please enter the Service ID:');
             } else if (!userAction[chatId].serviceId) {
                 const serviceId = parseInt(text, 10);
                 if (!isNaN(serviceId)) {
                     userAction[chatId].serviceId = serviceId;
 
-                    if (userAction[chatId].action === 'check_status' || userAction[chatId].action === 'get_details') {
+                    if (userAction[chatId].action === 'check_status') {
+                        getOrderDetails(chatId, userAction[chatId].username, userAction[chatId].serviceId);
+                    } else if (userAction[chatId].action === 'get_details') {
                         getOrderDetails(chatId, userAction[chatId].username, userAction[chatId].serviceId);
                     }
                     userAction[chatId] = null;
                 } else {
                     bot.sendMessage(chatId, '❗ Please enter a valid Service ID.');
+                }
+            } else if (!userAction[chatId].amount) {
+                const amount = parseInt(text, 10);
+                if (!isNaN(amount)) {
+                    const { username, action } = userAction[chatId];
+                    modifyBalance(chatId, username, amount, action);
+                    userAction[chatId] = null;
+                } else {
+                    bot.sendMessage(chatId, '❗ Please enter a valid number for the amount.');
                 }
             }
         }
