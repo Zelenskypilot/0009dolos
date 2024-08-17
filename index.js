@@ -6,61 +6,23 @@ const http = require('http');
 // Telegram Bot setup
 const API_TOKEN = process.env.API_TOKEN;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID; // Read admin user ID from .env
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
 const BASE_URL = 'https://socpanel.com/privateApi';
 
 let userAction = {};
 
-// Function to increment user balance
-async function addBalance(chatId, username, amount) {
-    const url = `${BASE_URL}/incrementUserBalance?login=${username}&amount=${amount}&token=${API_TOKEN}`;
-
-    bot.sendMessage(chatId, `🔍 Adding ${amount} to ${username}'s balance...`);
-
-    try {
-        const response = await axios.get(url);
-        if (response.data.ok) {
-            bot.sendMessage(chatId, `✅ Successfully added ${amount} to ${username}'s balance.`);
-        } else {
-            bot.sendMessage(chatId, `❌ Failed to add balance to ${username}.`);
-        }
-    } catch (error) {
-        console.error(`Error: ${error.message}`);
-        bot.sendMessage(chatId, `⚠️ Error while adding balance: ${error.message}`);
-    }
-}
-
-// Function to decrement user balance
-async function removeBalance(chatId, username, amount) {
-    const url = `${BASE_URL}/decrementUserBalance?login=${username}&amount=${amount}&token=${API_TOKEN}`;
-
-    bot.sendMessage(chatId, `🔍 Removing ${amount} from ${username}'s balance...`);
-
-    try {
-        const response = await axios.get(url);
-        if (response.data.ok) {
-            bot.sendMessage(chatId, `✅ Successfully removed ${amount} from ${username}'s balance.`);
-        } else {
-            bot.sendMessage(chatId, `❌ Failed to remove balance from ${username}.`);
-        }
-    } catch (error) {
-        console.error(`Error: ${error.message}`);
-        bot.sendMessage(chatId, `⚠️ Error while removing balance: ${error.message}`);
-    }
-}
-
-// Get Order Details
+// Get Order Details with detailed logging
 async function getOrderDetails(chatId, username, serviceId) {
-    const url = `${BASE_URL}/getOrders?service_id=${serviceId}&token=${API_TOKEN}`;
+    const url = `${BASE_URL}/getOrders?token=${API_TOKEN}`;
 
     bot.sendMessage(chatId, `🔍 Checking order details for Service ID: ${serviceId} and Username: ${username}...`);
 
     try {
         const response = await axios.get(url);
         if (response.data.count > 0) {
-            const order = response.data.items.find(order => order.user.login === username);
+            const order = response.data.items.find(order => order.user.login === username && order.service_id == serviceId);
             if (order) {
                 bot.sendMessage(chatId, `✅ Order found: 
 - Order ID: ${order.id}
@@ -71,14 +33,52 @@ async function getOrderDetails(chatId, username, serviceId) {
 - Service ID: ${order.service_id}
 - User: ${order.user.login}`);
             } else {
-                bot.sendMessage(chatId, `❌ No order found for Service ID: ${serviceId} and Username: ${username}.`);
+                bot.sendMessage(chatId, `❌ No order found for Service ID: ${serviceId} and Username: ${username}. Please make sure the Service ID is correct.`);
             }
         } else {
-            bot.sendMessage(chatId, `❌ Invalid Service ID: ${serviceId}.`);
+            bot.sendMessage(chatId, `❌ No orders found for Username: ${username}.`);
         }
     } catch (error) {
         console.error(`Error: ${error.message}`);
         bot.sendMessage(chatId, `⚠️ Error while trying to get order details: ${error.message}`);
+    }
+}
+
+// Increment user balance
+async function incrementBalance(chatId, username, amount) {
+    const url = `${BASE_URL}/incrementUserBalance?login=${username}&amount=${amount}&token=${API_TOKEN}`;
+
+    bot.sendMessage(chatId, `🔄 Adding ${amount} to balance for user ${username}...`);
+
+    try {
+        const response = await axios.get(url);
+        if (response.data.ok) {
+            bot.sendMessage(chatId, `✅ Balance successfully added for user ${username}.`);
+        } else {
+            bot.sendMessage(chatId, `❌ Failed to add balance for user ${username}.`);
+        }
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+        bot.sendMessage(chatId, `⚠️ Error while trying to add balance: ${error.message}`);
+    }
+}
+
+// Decrement user balance
+async function decrementBalance(chatId, username, amount) {
+    const url = `${BASE_URL}/decrementUserBalance?login=${username}&amount=${amount}&token=${API_TOKEN}`;
+
+    bot.sendMessage(chatId, `🔄 Removing ${amount} from balance for user ${username}...`);
+
+    try {
+        const response = await axios.get(url);
+        if (response.data.ok) {
+            bot.sendMessage(chatId, `✅ Balance successfully removed for user ${username}.`);
+        } else {
+            bot.sendMessage(chatId, `❌ Failed to remove balance for user ${username}.`);
+        }
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+        bot.sendMessage(chatId, `⚠️ Error while trying to remove balance: ${error.message}`);
     }
 }
 
@@ -122,30 +122,36 @@ bot.on('message', (msg) => {
         } else if (userAction[chatId]) {
             if (!userAction[chatId].username) {
                 userAction[chatId].username = text;
-                if (userAction[chatId].action === 'add' || userAction[chatId].action === 'remove') {
-                    bot.sendMessage(chatId, `🔍 Please enter the amount:`);
-                } else {
-                    bot.sendMessage(chatId, '🔍 Please enter the Service ID:');
-                }
-            } else if (userAction[chatId].action === 'add' || userAction[chatId].action === 'remove') {
-                const amount = parseFloat(text);
-                if (!isNaN(amount)) {
-                    if (userAction[chatId].action === 'add') {
-                        addBalance(chatId, userAction[chatId].username, amount);
-                    } else {
-                        removeBalance(chatId, userAction[chatId].username, amount);
+                bot.sendMessage(chatId, '🔍 Please enter the Service ID:');
+            } else if (!userAction[chatId].serviceId) {
+                const serviceId = parseInt(text, 10);
+                if (!isNaN(serviceId)) {
+                    userAction[chatId].serviceId = serviceId;
+
+                    if (userAction[chatId].action === 'check_status') {
+                        getOrderDetails(chatId, userAction[chatId].username, userAction[chatId].serviceId);
+                    } else if (userAction[chatId].action === 'get_details') {
+                        getOrderDetails(chatId, userAction[chatId].username, userAction[chatId].serviceId);
                     }
-                    userAction[chatId] = null;
+                    userAction[chatId] = null;  // Clear the action after processing
+                } else {
+                    bot.sendMessage(chatId, '❗ Please enter a valid Service ID.');
+                }
+            } else if (userAction[chatId].action === 'add') {
+                const amount = parseInt(text, 10);
+                if (!isNaN(amount)) {
+                    incrementBalance(chatId, userAction[chatId].username, amount);
+                    userAction[chatId] = null;  // Clear the action after processing
                 } else {
                     bot.sendMessage(chatId, '❗ Please enter a valid amount.');
                 }
-            } else if (userAction[chatId].action === 'check_status' || userAction[chatId].action === 'get_details') {
-                const serviceId = parseInt(text, 10);
-                if (!isNaN(serviceId)) {
-                    getOrderDetails(chatId, userAction[chatId].username, serviceId);
-                    userAction[chatId] = null;
+            } else if (userAction[chatId].action === 'remove') {
+                const amount = parseInt(text, 10);
+                if (!isNaN(amount)) {
+                    decrementBalance(chatId, userAction[chatId].username, amount);
+                    userAction[chatId] = null;  // Clear the action after processing
                 } else {
-                    bot.sendMessage(chatId, '❗ Please enter a valid Service ID.');
+                    bot.sendMessage(chatId, '❗ Please enter a valid amount.');
                 }
             }
         }
