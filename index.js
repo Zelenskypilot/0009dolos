@@ -16,15 +16,20 @@ async function modifyBalance(chatId, login, amount, action) {
     const endpoint = action === 'add' ? 'incrementUserBalance' : 'decrementUserBalance';
     const url = `${BASE_URL}/${endpoint}?login=${login}&amount=${amount}&token=${API_TOKEN}`;
 
+    bot.sendMessage(chatId, `Calling server to ${action} balance for user: ${login} with amount: ${amount}...`);
+
     try {
         const response = await axios.get(url);
+        console.log(response.data);  // Log the response for debugging
+
         if (response.data.ok) {
-            bot.sendMessage(chatId, `Balance successfully ${action === 'add' ? 'added to' : 'removed from'} user ${login}.`);
+            bot.sendMessage(chatId, `Success! ${action === 'add' ? 'Added' : 'Removed'} ${amount} balance for user: ${login}.`);
         } else {
-            bot.sendMessage(chatId, `Failed to ${action} balance for user ${login}.`);
+            bot.sendMessage(chatId, `Failed to ${action} balance. Server response was not OK.`);
         }
     } catch (error) {
-        bot.sendMessage(chatId, `Error: ${error.message}`);
+        console.error(`Error: ${error.message}`);  // Log the error for debugging
+        bot.sendMessage(chatId, `Error while trying to ${action} balance: ${error.message}`);
     }
 }
 
@@ -65,7 +70,7 @@ bot.on('message', (msg) => {
             userAction[chatId].amount = amount;
             const { login, amount, action } = userAction[chatId];
             modifyBalance(chatId, login, amount, action);
-            userAction[chatId] = null;
+            userAction[chatId] = null;  // Clear the action after processing
         }
     }
 });
