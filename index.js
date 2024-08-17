@@ -1,7 +1,9 @@
 require('dotenv').config();
 const axios = require('axios');
 const TelegramBot = require('node-telegram-bot-api');
+const http = require('http');
 
+// Telegram Bot setup
 const API_TOKEN = process.env.API_TOKEN;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
@@ -66,4 +68,13 @@ bot.on('message', (msg) => {
             userAction[chatId] = null;
         }
     }
+});
+
+// HTTP server setup to keep the bot running on Render
+const port = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot is running...\n');
+}).listen(port, () => {
+    console.log(`Server is listening on port ${port}`);
 });
