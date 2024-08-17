@@ -13,37 +13,17 @@ const BASE_URL = 'https://socpanel.com/privateApi';
 
 let userAction = {};
 
-// Modify Balance
-async function modifyBalance(chatId, username, amount, action) {
-    const endpoint = action === 'add' ? 'incrementUserBalance' : 'decrementUserBalance';
-    const url = `${BASE_URL}/${endpoint}?login=${username}&amount=${amount}&token=${API_TOKEN}`;
-
-    bot.sendMessage(chatId, `🔄 Calling server to ${action} balance for username: ${username} with amount: ${amount}...`);
-
-    try {
-        const response = await axios.get(url);
-        console.log(response.data);  // Log the response for debugging
-
-        if (response.data.ok) {
-            bot.sendMessage(chatId, `✅ Success! ${action === 'add' ? 'Added' : 'Removed'} ${amount} balance for username: ${username}.`);
-        } else {
-            bot.sendMessage(chatId, `❌ Failed to ${action} balance. Server response was not OK.`);
-        }
-    } catch (error) {
-        console.error(`Error: ${error.message}`);  // Log the error for debugging
-        bot.sendMessage(chatId, `⚠️ Error while trying to ${action} balance: ${error.message}`);
-    }
-}
-
-// Get Order Details
+// Get Order Details with detailed logging
 async function getOrderDetails(chatId, username, orderId) {
     const url = `${BASE_URL}/getOrders?order_ids=${orderId}&token=${API_TOKEN}`;
-
+    
+    // Log the URL to see exactly what is being requested
+    console.log(`Requesting URL: ${url}`);
     bot.sendMessage(chatId, `🔍 Checking order details for Order ID: ${orderId} and Username: ${username}...`);
-
+    
     try {
         const response = await axios.get(url);
-        console.log(response.data);  // Log the response for debugging
+        console.log('Response from API:', response.data); // Log the API response
 
         if (response.data.count > 0) {
             const order = response.data.items.find(order => order.user.login === username);
