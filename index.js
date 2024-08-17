@@ -6,104 +6,94 @@ const http = require('http');
 // Telegram Bot setup
 const API_TOKEN = process.env.API_TOKEN;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID; // Read admin user ID from .env
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
 const BASE_URL = 'https://socpanel.com/privateApi';
 
 let userAction = {};
 
-// Get Order Details with detailed logging
-async function getOrderDetails(chatId, username, orderId) {
-    const url = `${BASE_URL}/getOrders?order_ids=${orderId}&token=${API_TOKEN}`;
-    
-    // Log the URL to see exactly what is being requested
-    console.log(`Requesting URL: ${url}`);
-    bot.sendMessage(chatId, `🔍 Checking order details for Order ID: ${orderId} and Username: ${username}...`);
-    
+async function getOrderInfo(chatId, serviceId) {
+    const url = `${BASE_URL}/getOrders?service_id=${serviceId}&token=${API_TOKEN}`;
+
+    bot.sendMessage(chatId, `🔄 Checking order information for service ID: ${serviceId}...`);
+
     try {
         const response = await axios.get(url);
-        console.log('Response from API:', response.data); // Log the API response
+        const data = response.data;
 
-        if (response.data.count > 0) {
-            const order = response.data.items.find(order => order.user.login === username);
-            if (order) {
-                bot.sendMessage(chatId, `✅ Order found: 
-- Order ID: ${order.id}
-- Charge: ${order.charge}
-- Start Count: ${order.start_count}
-- Status: ${order.status}
-- Remains: ${order.remains}
-- Service ID: ${order.service_id}
-- User: ${order.user.login}`);
-            } else {
-                bot.sendMessage(chatId, `❌ No order found for Order ID: ${orderId} and Username: ${username}.`);
-            }
+        if (data.count > 0) {
+            const order = data.items[0];
+            bot.sendMessage(chatId, `✅ Order Found:\n\nID: ${order.id}\nCharge: ${order.charge}\nStart Count: ${order.start_count}\nStatus: ${order.status}\nRemains: ${order.remains}\nCurrency: ${order.currency}\nService ID: ${order.service_id}\nUser: ${order.user.login}`);
         } else {
-            bot.sendMessage(chatId, `❌ No order found for Order ID: ${orderId}.`);
+            bot.sendMessage(chatId, `❌ No order found for Service ID: ${serviceId}`);
         }
     } catch (error) {
-        console.error(`Error: ${error.message}`);  // Log the error for debugging
-        bot.sendMessage(chatId, `⚠️ Error while trying to get order details: ${error.message}`);
+        console.error(`Error: ${error.message}`);
+        bot.sendMessage(chatId, `⚠️ Error while checking order: ${error.message}`);
     }
 }
 
-// Handle /start command
+async function checkOrderStatus(chatId, serviceId) {
+    const url = `${BASE_URL}/getOrders?service_id=${serviceId}&token=${API_TOKEN}`;
+
+    bot.sendMessage(chatId, `🔄 Checking order status for service ID: ${serviceId}...`);
+
+    try {
+        const response = await axios.get(url);
+        const data = response.data;
+
+        if (data.count > 0) {
+            const order = data.items[0];
+            bot.sendMessage(chatId, `✅ Order Status:\n\nID: ${order.id}\nStatus: ${order.status}`);
+        } else {
+            bot.sendMessage(chatId, `❌ No order found for Service ID: ${serviceId}`);
+        }
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+        bot.sendMessage(chatId, `⚠️ Error while checking order status: ${error.message}`);
+    }
+}
+
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
 
-    // Check if the user is the admin
     if (chatId === parseInt(ADMIN_USER_ID, 10)) {
-        const opts = {
+        const options = {
             reply_markup: {
                 keyboard: [
-                    [{ text: '➕ Add Balance' }],
-                    [{ text: '➖ Remove Balance' }],
-                    [{ text: '🔍 Check Order Status' }],
-                    [{ text: 'ℹ️ Get Order Details' }]
+                    [{ text: 'Get Order Info' }],
+                    [{ text: 'Check Order Status' }],
                 ],
                 resize_keyboard: true,
                 one_time_keyboard: true,
             },
         };
-        bot.sendMessage(chatId, '🎉 Welcome to the Trendifysmm Marketing Agency Admin Bot! I can help manage www.trendifysmm.com website.', opts);
+        bot.sendMessage(chatId, '🎉 Welcome to the Trendifysmm Marketing Agency Admin Bot! I can help manage www.trendifysmm.com website.', options);
     } else {
         bot.sendMessage(chatId, '🚫 You are not authorized to use this bot.');
     }
 });
 
-// Handle Text Messages
 bot.on('message', (msg) => {
     const chatId = msg.chat.id;
     const text = msg.text.trim();
 
-    // Check if the user is the admin
     if (chatId === parseInt(ADMIN_USER_ID, 10)) {
-        if (text === '➕ Add Balance' || text === '➖ Remove Balance') {
-            userAction[chatId] = { action: text.includes('Add') ? 'add' : 'remove' };
-            bot.sendMessage(chatId, `✏️ You chose to ${userAction[chatId].action} balance. Please enter the username:`);
-        } else if (text === '🔍 Check Order Status' || text === 'ℹ️ Get Order Details') {
-            userAction[chatId] = { action: text.includes('Check') ? 'check_status' : 'get_details' };
-            bot.sendMessage(chatId, '🔍 Please enter the username associated with the order:');
-        } else if (userAction[chatId]) {
-            if (!userAction[chatId].username) {
-                userAction[chatId].username = text;
-                bot.sendMessage(chatId, '🔍 Please enter the Order ID:');
-            } else if (!userAction[chatId].orderId) {
-                const orderId = parseInt(text, 10);
-                if (!isNaN(orderId)) {
-                    userAction[chatId].orderId = orderId;
-
-                    if (userAction[chatId].action === 'check_status') {
-                        getOrderDetails(chatId, userAction[chatId].username, userAction[chatId].orderId);
-                    } else if (userAction[chatId].action === 'get_details') {
-                        getOrderDetails(chatId, userAction[chatId].username, userAction[chatId].orderId);
-                    }
-                    userAction[chatId] = null;  // Clear the action after processing
-                } else {
-                    bot.sendMessage(chatId, '❗ Please enter a valid Order ID.');
-                }
-            }
+        if (text === 'Get Order Info') {
+            userAction[chatId] = 'get_order_info';
+            bot.sendMessage(chatId, '✏️ Please enter the Service ID:');
+        } else if (text === 'Check Order Status') {
+            userAction[chatId] = 'check_order_status';
+            bot.sendMessage(chatId, '✏️ Please enter the Service ID:');
+        } else if (userAction[chatId] === 'get_order_info' && text) {
+            const serviceId = text;
+            getOrderInfo(chatId, serviceId);
+            userAction[chatId] = null;  // Clear the action after processing
+        } else if (userAction[chatId] === 'check_order_status' && text) {
+            const serviceId = text;
+            checkOrderStatus(chatId, serviceId);
+            userAction[chatId] = null;  // Clear the action after processing
         }
     } else {
         bot.sendMessage(chatId, '🚫 You are not authorized to use this bot.');
