@@ -74,7 +74,7 @@ async function getOrderDetails(chatId, username, serviceId) {
                 bot.sendMessage(chatId, `❌ No order found for Service ID: ${serviceId} and Username: ${username}.`);
             }
         } else {
-            bot.sendMessage(chatId, `❌ No order found for Service ID: ${serviceId}.`);
+            bot.sendMessage(chatId, `❌ Invalid Service ID: ${serviceId}.`);
         }
     } catch (error) {
         console.error(`Error: ${error.message}`);
@@ -122,34 +122,30 @@ bot.on('message', (msg) => {
         } else if (userAction[chatId]) {
             if (!userAction[chatId].username) {
                 userAction[chatId].username = text;
-                bot.sendMessage(chatId, '🔍 Please enter the Service ID:');
-            } else if (!userAction[chatId].serviceId) {
-                const serviceId = parseInt(text, 10);
-                if (!isNaN(serviceId)) {
-                    userAction[chatId].serviceId = serviceId;
-
-                    if (userAction[chatId].action === 'check_status') {
-                        getOrderDetails(chatId, userAction[chatId].username, userAction[chatId].serviceId);
-                    } else if (userAction[chatId].action === 'get_details') {
-                        getOrderDetails(chatId, userAction[chatId].username, userAction[chatId].serviceId);
-                    }
-                    userAction[chatId] = null;
+                if (userAction[chatId].action === 'add' || userAction[chatId].action === 'remove') {
+                    bot.sendMessage(chatId, `🔍 Please enter the amount:`);
                 } else {
-                    bot.sendMessage(chatId, '❗ Please enter a valid Service ID.');
+                    bot.sendMessage(chatId, '🔍 Please enter the Service ID:');
                 }
-            } else if (userAction[chatId].amount === undefined && (userAction[chatId].action === 'add' || userAction[chatId].action === 'remove')) {
+            } else if (userAction[chatId].action === 'add' || userAction[chatId].action === 'remove') {
                 const amount = parseFloat(text);
                 if (!isNaN(amount)) {
-                    userAction[chatId].amount = amount;
-
                     if (userAction[chatId].action === 'add') {
-                        addBalance(chatId, userAction[chatId].username, userAction[chatId].amount);
-                    } else if (userAction[chatId].action === 'remove') {
-                        removeBalance(chatId, userAction[chatId].username, userAction[chatId].amount);
+                        addBalance(chatId, userAction[chatId].username, amount);
+                    } else {
+                        removeBalance(chatId, userAction[chatId].username, amount);
                     }
                     userAction[chatId] = null;
                 } else {
                     bot.sendMessage(chatId, '❗ Please enter a valid amount.');
+                }
+            } else if (userAction[chatId].action === 'check_status' || userAction[chatId].action === 'get_details') {
+                const serviceId = parseInt(text, 10);
+                if (!isNaN(serviceId)) {
+                    getOrderDetails(chatId, userAction[chatId].username, serviceId);
+                    userAction[chatId] = null;
+                } else {
+                    bot.sendMessage(chatId, '❗ Please enter a valid Service ID.');
                 }
             }
         }
