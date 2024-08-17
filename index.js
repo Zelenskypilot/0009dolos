@@ -70,25 +70,27 @@ bot.on('callback_query', (callbackQuery) => {
 
 bot.on('message', (msg) => {
     const chatId = msg.chat.id;
+    const text = msg.text.trim();
 
     // Check if the user is the admin
     if (chatId === parseInt(ADMIN_USER_ID, 10)) {
-        if (userAction[chatId] && !userAction[chatId].username) {
-            const username = msg.text.trim();
-            if (!username) {
-                bot.sendMessage(chatId, '❗ Please enter a valid username.');
-            } else {
-                userAction[chatId].username = username;
-                bot.sendMessage(chatId, '💰 Please enter the amount:');
-            }
-        } else if (userAction[chatId] && userAction[chatId].username && !userAction[chatId].amount) {
-            const amount = parseInt(msg.text, 10);
-            if (isNaN(amount)) {
-                bot.sendMessage(chatId, '❗ Please enter a valid number for the amount.');
-            } else {
-                const { username, action } = userAction[chatId];
-                modifyBalance(chatId, username, amount, action);
-                userAction[chatId] = null;  // Clear the action after processing
+        if (userAction[chatId]) {
+            if (!userAction[chatId].username) {
+                if (text) {
+                    userAction[chatId].username = text;
+                    bot.sendMessage(chatId, '💰 Please enter the amount:');
+                } else {
+                    bot.sendMessage(chatId, '❗ Please enter a valid username.');
+                }
+            } else if (!userAction[chatId].amount) {
+                const amount = parseInt(text, 10);
+                if (!isNaN(amount)) {
+                    const { username, action } = userAction[chatId];
+                    modifyBalance(chatId, username, amount, action);
+                    userAction[chatId] = null;  // Clear the action after processing
+                } else {
+                    bot.sendMessage(chatId, '❗ Please enter a valid number for the amount.');
+                }
             }
         }
     } else {
