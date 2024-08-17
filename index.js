@@ -6,14 +6,14 @@ const http = require('http');
 // Telegram Bot setup
 const API_TOKEN = process.env.API_TOKEN;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID; // Read admin user ID from .env
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
 const BASE_URL = 'https://socpanel.com/privateApi';
 
 let userAction = {};
 
-// Get Order Details using Service ID
+// Function to get order details using Service ID
 async function getOrderDetails(chatId, username, serviceId) {
     const url = `${BASE_URL}/getOrders?service_id=${serviceId}&token=${API_TOKEN}`;
     
@@ -21,7 +21,7 @@ async function getOrderDetails(chatId, username, serviceId) {
     
     try {
         const response = await axios.get(url);
-        console.log('Response from API:', response.data); // Log the API response
+        console.log('Response from API:', response.data);
 
         if (response.data.count > 0) {
             const order = response.data.items.find(order => order.user.login === username);
@@ -41,7 +41,7 @@ async function getOrderDetails(chatId, username, serviceId) {
             bot.sendMessage(chatId, `❌ No order found for Service ID: ${serviceId}.`);
         }
     } catch (error) {
-        console.error(`Error: ${error.message}`);  // Log the error for debugging
+        console.error(`Error: ${error.message}`);
         bot.sendMessage(chatId, `⚠️ Error while trying to get order details: ${error.message}`);
     }
 }
@@ -50,7 +50,6 @@ async function getOrderDetails(chatId, username, serviceId) {
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
 
-    // Check if the user is the admin
     if (chatId === parseInt(ADMIN_USER_ID, 10)) {
         const opts = {
             reply_markup: {
@@ -75,7 +74,6 @@ bot.on('message', (msg) => {
     const chatId = msg.chat.id;
     const text = msg.text.trim();
 
-    // Check if the user is the admin
     if (chatId === parseInt(ADMIN_USER_ID, 10)) {
         if (text === '➕ Add Balance' || text === '➖ Remove Balance') {
             userAction[chatId] = { action: text.includes('Add') ? 'add' : 'remove' };
@@ -86,18 +84,28 @@ bot.on('message', (msg) => {
         } else if (userAction[chatId]) {
             if (!userAction[chatId].username) {
                 userAction[chatId].username = text;
-                bot.sendMessage(chatId, '🔍 Please enter the Service ID:');
+                if (userAction[chatId].action === 'add' || userAction[chatId].action === 'remove') {
+                    bot.sendMessage(chatId, `🔍 Please enter the amount to ${userAction[chatId].action}:`);
+                } else {
+                    bot.sendMessage(chatId, '🔍 Please enter the Service ID:');
+                }
+            } else if (userAction[chatId].action === 'add' || userAction[chatId].action === 'remove') {
+                const amount = parseFloat(text);
+                if (!isNaN(amount)) {
+                    bot.sendMessage(chatId, `✅ Successfully ${userAction[chatId].action}ed ${amount} to ${userAction[chatId].username}'s balance.`);
+                    userAction[chatId] = null;
+                } else {
+                    bot.sendMessage(chatId, '❗ Please enter a valid amount.');
+                }
             } else if (!userAction[chatId].serviceId) {
                 const serviceId = parseInt(text, 10);
                 if (!isNaN(serviceId)) {
                     userAction[chatId].serviceId = serviceId;
 
-                    if (userAction[chatId].action === 'check_status') {
-                        getOrderDetails(chatId, userAction[chatId].username, userAction[chatId].serviceId);
-                    } else if (userAction[chatId].action === 'get_details') {
+                    if (userAction[chatId].action === 'check_status' || userAction[chatId].action === 'get_details') {
                         getOrderDetails(chatId, userAction[chatId].username, userAction[chatId].serviceId);
                     }
-                    userAction[chatId] = null;  // Clear the action after processing
+                    userAction[chatId] = null;
                 } else {
                     bot.sendMessage(chatId, '❗ Please enter a valid Service ID.');
                 }
