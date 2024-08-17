@@ -12,18 +12,18 @@ const BASE_URL = 'https://socpanel.com/privateApi';
 
 let userAction = {};
 
-async function modifyBalance(chatId, login, amount, action) {
+async function modifyBalance(chatId, userId, amount, action) {
     const endpoint = action === 'add' ? 'incrementUserBalance' : 'decrementUserBalance';
-    const url = `${BASE_URL}/${endpoint}?login=${login}&amount=${amount}&token=${API_TOKEN}`;
+    const url = `${BASE_URL}/${endpoint}?user_id=${userId}&amount=${amount}&token=${API_TOKEN}`;
 
-    bot.sendMessage(chatId, `Calling server to ${action} balance for user: ${login} with amount: ${amount}...`);
+    bot.sendMessage(chatId, `Calling server to ${action} balance for user ID: ${userId} with amount: ${amount}...`);
 
     try {
         const response = await axios.get(url);
         console.log(response.data);  // Log the response for debugging
 
         if (response.data.ok) {
-            bot.sendMessage(chatId, `Success! ${action === 'add' ? 'Added' : 'Removed'} ${amount} balance for user: ${login}.`);
+            bot.sendMessage(chatId, `Success! ${action === 'add' ? 'Added' : 'Removed'} ${amount} balance for user ID: ${userId}.`);
         } else {
             bot.sendMessage(chatId, `Failed to ${action} balance. Server response was not OK.`);
         }
@@ -52,24 +52,28 @@ bot.on('callback_query', (callbackQuery) => {
 
     if (action === 'add_balance' || action === 'remove_balance') {
         userAction[chatId] = { action: action === 'add_balance' ? 'add' : 'remove' };
-        bot.sendMessage(chatId, `You chose to ${userAction[chatId].action} balance. Please enter the user's login:`);
+        bot.sendMessage(chatId, `You chose to ${userAction[chatId].action} balance. Please enter the user's ID:`);
     }
 });
 
 bot.on('message', (msg) => {
     const chatId = msg.chat.id;
 
-    if (userAction[chatId] && !userAction[chatId].login) {
-        userAction[chatId].login = msg.text;
-        bot.sendMessage(chatId, 'Please enter the amount:');
-    } else if (userAction[chatId] && userAction[chatId].login && !userAction[chatId].amount) {
+    if (userAction[chatId] && !userAction[chatId].userId) {
+        const userId = parseInt(msg.text, 10);
+        if (isNaN(userId)) {
+            bot.sendMessage(chatId, 'Please enter a valid user ID (a number).');
+        } else {
+            userAction[chatId].userId = userId;
+            bot.sendMessage(chatId, 'Please enter the amount:');
+        }
+    } else if (userAction[chatId] && userAction[chatId].userId && !userAction[chatId].amount) {
         const amount = parseInt(msg.text, 10);
         if (isNaN(amount)) {
             bot.sendMessage(chatId, 'Please enter a valid number for the amount.');
         } else {
-            userAction[chatId].amount = amount;
-            const { login, amount, action } = userAction[chatId];
-            modifyBalance(chatId, login, amount, action);
+            const { userId, action } = userAction[chatId];
+            modifyBalance(chatId, userId, amount, action);
             userAction[chatId] = null;  // Clear the action after processing
         }
     }
